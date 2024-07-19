@@ -1,21 +1,44 @@
 type LogLevel = "info" | "warn" | "error" | "debug";
+type Color =
+  | "black"
+  | "red"
+  | "green"
+  | "yellow"
+  | "blue"
+  | "magenta"
+  | "cyan"
+  | "white";
 
 interface ChromaLogOptions {
   showTimestamp?: boolean;
   showFileName?: boolean;
+  timeFormat?: string;
+  customColors?: Record<string, Color>;
 }
 
 class ChromaLog {
   private options: ChromaLogOptions;
+  private colors: Record<Color, string> = {
+    black: "30",
+    red: "31",
+    green: "32",
+    yellow: "33",
+    blue: "34",
+    magenta: "35",
+    cyan: "36",
+    white: "37",
+  };
 
   constructor(options: ChromaLogOptions = {}) {
     this.options = {
       showTimestamp: options.showTimestamp ?? true,
       showFileName: options.showFileName ?? true,
+      timeFormat: options.timeFormat ?? "HH:mm:ss",
+      customColors: options.customColors ?? {},
     };
   }
 
-  log<T>(data: T, level: LogLevel = "info"): void {
+  log<T>(data: T, level: LogLevel = "info", color?: Color): void {
     const coloredLevel = this.colorize(
       level.toUpperCase(),
       this.getLevelColor(level)
@@ -34,17 +57,32 @@ class ChromaLog {
   }
 
   private getLevelColor(level: LogLevel): string {
-    const colors: Record<LogLevel, string> = {
-      info: "36", // Cyan
-      warn: "33", // Yellow
-      error: "31", // Red
-      debug: "35", // Magenta
+    const defaultColors: Record<LogLevel, Color> = {
+      info: "cyan",
+      warn: "yellow",
+      error: "red",
+      debug: "magenta",
     };
-    return colors[level];
+    const color = this.options.customColors?.[level] ?? defaultColors[level];
+    return this.colors[color];
   }
 
   private getTimestamp(): string {
-    return `[${new Date().toISOString()}] `;
+    const date = new Date();
+    let formatted = this.options.timeFormat ?? "HH:mm:ss";
+    formatted = formatted.replace(
+      "HH",
+      date.getHours().toString().padStart(2, "0")
+    );
+    formatted = formatted.replace(
+      "mm",
+      date.getMinutes().toString().padStart(2, "0")
+    );
+    formatted = formatted.replace(
+      "ss",
+      date.getSeconds().toString().padStart(2, "0")
+    );
+    return `[${formatted}] `;
   }
 
   private getFileName(): string {
@@ -54,27 +92,29 @@ class ChromaLog {
     return match ? `[${match[1]}] ` : "";
   }
 
-  private formatData<T>(data: T): string {
-    if (typeof data === "object" && data !== null) {
-      return JSON.stringify(data, null, 2);
-    }
-    return String(data);
+  private formatData<T>(data: T, color?: Color): string {
+    let formatted =
+      typeof data === "object" && data !== null
+        ? JSON.stringify(data, null, 2)
+        : String(data);
+
+    return color ? this.colorize(formatted, this.colors[color]) : formatted;
   }
 
-  info<T>(data: T): void {
-    this.log(data, "info");
+  info<T>(data: T, color?: Color): void {
+    this.log(data, "info", color);
   }
 
-  warn<T>(data: T): void {
-    this.log(data, "warn");
+  warn<T>(data: T, color?: Color): void {
+    this.log(data, "warn", color);
   }
 
-  error<T>(data: T): void {
-    this.log(data, "error");
+  error<T>(data: T, color?: Color): void {
+    this.log(data, "error", color);
   }
 
-  debug<T>(data: T): void {
-    this.log(data, "debug");
+  debug<T>(data: T, color?: Color): void {
+    this.log(data, "debug", color);
   }
 
   private timers: Map<string, number> = new Map();
