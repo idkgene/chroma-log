@@ -1,3 +1,6 @@
+import fs from "fs";
+import path from "path";
+
 type LogLevel = "info" | "warn" | "error" | "debug";
 type Color =
   | "black"
@@ -14,6 +17,10 @@ interface ChromaLogOptions {
   showFileName?: boolean;
   timeFormat?: string;
   customColors?: Record<string, Color>;
+  logToFile?: boolean;
+  logDirectory?: string;
+  maxFileSize?: number;
+  maxFiles?: number;
 }
 
 class ChromaLog {
@@ -29,13 +36,62 @@ class ChromaLog {
     white: "37",
   };
 
+  private currentLogFile: string | null = null;
+  private currentFileSize: number = 0;
+
   constructor(options: ChromaLogOptions = {}) {
     this.options = {
       showTimestamp: options.showTimestamp ?? true,
       showFileName: options.showFileName ?? true,
       timeFormat: options.timeFormat ?? "HH:mm:ss",
       customColors: options.customColors ?? {},
+      logToFile: options.logToFile ?? false,
+      logDirectory: options.logDirectory ?? "./logs",
+      maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10 MB
+      maxFiles: options.maxFiles ?? 5,
     };
+
+    if (this.options.logToFile) {
+      this.ensureLogDirectory();
+      this.rotateLogFiles();
+    }
+  }
+
+  private ensureLogDirectory(): void {
+    if (!fs.existsSync(this.options.logDirectory!)) {
+      fs.mkdirSync(this.options.logDirectory!, { recursive: true });
+    }
+  }
+
+  private rotateLogFiles(): void {
+    const files = fs
+      .readdirSync(this.options.logDirectory!)
+      .filter((file) => file.startsWith("log_"))
+      .sort((a, b) => b.localeCompare(a));
+
+    while (files.length >= this.options.maxFiles!) {
+      const oldestFile = files.pop();
+      if (oldestFile) {
+        fs.unlinkSync(path.join(this.options.logDirectory!, oldestFile));
+      }
+    }
+
+    this.currentLogFile = path.join(
+      this.options.logDirectory!,
+      `log_${Date.now()}.log`
+    );
+    this.currentFileSize = 0;
+  }
+
+  private writeToFile(message: string): void {
+    if (!this.options.logToFile || !this.currentLogFile) return;
+
+    fs.appendFileSync(this.currentLogFile, message + "\n");
+    this.currentFileSize += Buffer.byteLength(message + "\n");
+
+    if (this.currentFileSize > this.options.maxFileSize!) {
+      this.rotateLogFiles();
+    }
   }
 
   log<T>(data: T, level: LogLevel = "info", color?: Color): void {
@@ -46,10 +102,18 @@ class ChromaLog {
     const timestamp = this.options.showTimestamp ? this.getTimestamp() : "";
     const fileName = this.options.showFileName ? this.getFileName() : "";
 
-    console.log(
-      `${coloredLevel} ${timestamp}${fileName}`,
-      this.formatData(data)
-    );
+    const logMessage = `${coloredLevel} ${timestamp}${fileName} ${this.formatData(
+      data
+    )}`;
+    console.log(logMessage);
+
+    if (this.options.logToFile) {
+      this.writeToFile(this.stripAnsiCodes(logMessage));
+    }
+  }
+
+  private stripAnsiCodes(str: string): string {
+    return str.replace(/\x1b\[[0-9;]*m/g, "");
   }
 
   private colorize(text: string, color: string): string {
@@ -135,4 +199,4 @@ class ChromaLog {
   }
 }
 
-export const chrommaLog = new ChromaLog();
+export { ChromaLog };

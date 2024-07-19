@@ -1,8 +1,11 @@
-import { chrommaLog } from "./chromalog";
+import { ChromaLog } from "./chromalog";
 
-chrommaLog.info("Hello world!");
-chrommaLog.warn("This is a warning");
-chrommaLog.error("This is an error");
-chrommaLog.debug("This is a debug message");
+const logger = new ChromaLog({
+  logToFile: true,
+  logDirectory: "./logs",
+  maxFileSize: 1024 * 1024, // 1 MB
+  maxFiles: 3,
+});
 
-chrommaLog.time("test");
+logger.info("This is a test log message");
+logger.error("This is an error message");
