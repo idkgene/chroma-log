@@ -21,6 +21,8 @@ interface ChromaLogOptions {
   logDirectory?: string;
   maxFileSize?: number;
   maxFiles?: number;
+  minLogLevel?: LogLevel;
+  logFormat?: string;
 }
 
 class ChromaLog {
@@ -39,6 +41,13 @@ class ChromaLog {
   private currentLogFile: string | null = null;
   private currentFileSize: number = 0;
 
+  private logLevels: Record<LogLevel, number> = {
+    debug: 0,
+    info: 1,
+    warn: 2,
+    error: 3,
+  };
+
   constructor(options: ChromaLogOptions = {}) {
     this.options = {
       showTimestamp: options.showTimestamp ?? true,
@@ -49,6 +58,9 @@ class ChromaLog {
       logDirectory: options.logDirectory ?? "./logs",
       maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10 MB
       maxFiles: options.maxFiles ?? 5,
+      minLogLevel: options.minLogLevel ?? "debug",
+      logFormat:
+        options.logFormat ?? "{level} {timestamp} {fileName} {message}",
     };
 
     if (this.options.logToFile) {
@@ -95,16 +107,24 @@ class ChromaLog {
   }
 
   log<T>(data: T, level: LogLevel = "info", color?: Color): void {
+    if (this.logLevels[level] < this.logLevels[this.options.minLogLevel!]) {
+      return;
+    }
+
     const coloredLevel = this.colorize(
       level.toUpperCase(),
       this.getLevelColor(level)
     );
-    const timestamp = this.options.showTimestamp ? this.getTimestamp() : "";
-    const fileName = this.options.showFileName ? this.getFileName() : "";
+    const timestamp = this.getTimestamp();
+    const fileName = this.getFileName();
+    const message = this.formatData(data);
 
-    const logMessage = `${coloredLevel} ${timestamp}${fileName} ${this.formatData(
-      data
-    )}`;
+    const logMessage = this.options
+      .logFormat!.replace("{level}", coloredLevel)
+      .replace("{timestamp}", timestamp)
+      .replace("{fileName}", fileName)
+      .replace("{message}", message);
+
     console.log(logMessage);
 
     if (this.options.logToFile) {
