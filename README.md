@@ -1,7 +1,7 @@
 <h3 align="center">🚀 Loggy </h3>
 
 
-<samp>📝 Straightforward minimal logger - like Pino (I REALLY like it), but even more lightweight (at least I try to)</samp>
+<samp align="center">📝 Straightforward minimal logger - like Pino (I REALLY like it), but even more lightweight (at least I try to)</samp>
 
 ## 📦 Installation
 
