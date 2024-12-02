@@ -1,4 +1,4 @@
-<h3 align="center">🚀 Loggy </h3>
+<h3>🚀 Loggy </h3>
 
 
 <samp align="center">📝 Straightforward minimal logger - like Pino (I REALLY like it), but even more lightweight (at least I try to)</samp>
