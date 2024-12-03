@@ -7,7 +7,12 @@ export const DEFAULT_OPTIONS = {
   maxFileSize: 10 * 1024 * 1024, // 10 MB
   maxFiles: 5,
   minLogLevel: "debug",
-  logFormat: "{level} {timestamp} {fileName} {message}",
+  logFormat: "{level} {timestamp} {fileName} {context} {message}",
+  errorFormat: {
+    includeStack: true,
+    includeCause: true,
+    includeMetadata: true
+  }
 } as const;
 
 export const LOG_LEVELS = {
