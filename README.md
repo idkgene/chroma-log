@@ -15,7 +15,7 @@ Loggy is a high-performance, extensible logging library for Rust.
 Add the following line to your Cargo.toml:
 
 ```toml
-[dependencies].
+[dependencies]
 loggy = “0.1.0”
 ```
 
