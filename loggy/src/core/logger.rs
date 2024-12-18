@@ -28,7 +28,7 @@ impl Logger {
         formatter: Arc<dyn Formatter>,
         writer: Arc<dyn Writer>,
     ) -> Self {
-        let (sender, receiver) = bounded(1000); // Ограничиваем размер очереди
+        let (sender, receiver) = bounded(1000);
         let logger = Logger {
             config,
             formatter,
