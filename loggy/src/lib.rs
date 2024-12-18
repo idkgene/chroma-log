@@ -1,84 +1,96 @@
-pub mod level;
-pub mod entry;
+pub mod config;
+pub mod core;
 pub mod formatter;
 pub mod writer;
-pub mod config;
+pub mod plugins;
 
 use std::sync::Arc;
 use parking_lot::RwLock;
-use crossbeam_channel::{unbounded, Sender, Receiver};
 use anyhow::Result;
 
-use crate::level::Level;
-use crate::entry::LogEntry;
-use crate::formatter::Formatter;
-use crate::writer::Writer;
-use crate::config::Config;
+pub use crate::core::{Logger, Level, LogEntry};
+pub use crate::config::{Config, TomlConfig};
+pub use crate::formatter::{Formatter, JsonFormatter, SimpleFormatter};
+pub use crate::writer::{Writer, ConsoleWriter, FileWriter};
+pub use crate::plugins::{Plugin, StackTracePlugin, SensitiveDataMaskPlugin};
 
-pub struct Logger {
-    config: Arc<RwLock<Config>>,
-    formatter: Arc<dyn Formatter + Send + Sync>,
-    writer: Arc<dyn Writer + Send + Sync>,
-    sender: Sender<LogEntry>,
+pub struct LoggyBuilder {
+    config: Option<Arc<RwLock<dyn Config>>>,
+    formatter: Option<Arc<dyn Formatter>>,
+    writer: Option<Arc<dyn Writer>>,
+    plugins: Vec<Box<dyn Plugin>>,
 }
 
-impl Logger {
-    pub fn new(config: Config, formatter: Arc<dyn Formatter + Send + Sync>, writer: Arc<dyn Writer + Send + Sync>) -> Self {
-        let (sender, receiver) = unbounded();
-        let logger = Logger {
-            config: Arc::new(RwLock::new(config)),
-            formatter,
-            writer,
-            sender,
-        };
-        logger.start_worker(receiver);
-        logger
+impl LoggyBuilder {
+    pub fn new() -> Self {
+        Self {
+            config: None,
+            formatter: None,
+            writer: None,
+            plugins: Vec::new(),
+        }
     }
 
-    fn start_worker(&self, receiver: Receiver<LogEntry>) {
-        let config = self.config.clone();
-        let formatter = self.formatter.clone();
-        let writer = self.writer.clone();
-        std::thread::spawn(move || {
-            while let Ok(entry) = receiver.recv() {
-                let config = config.read();
-                if entry.level >= config.min_level {
-                    let formatted = formatter.format(&entry);
-                    if let Err(e) = writer.write(&formatted) {
-                        eprintln!("Failed to write log: {}", e);
-                    }
-                }
-            }
-        });
+    pub fn with_config(mut self, config: Arc<RwLock<dyn Config>>) -> Self {
+        self.config = Some(config);
+        self
     }
 
-    pub fn log(&self, level: Level, message: String, metadata: Option<serde_json::Value>) -> Result<()> {
-        let entry = LogEntry::new(level, message, metadata);
-        self.sender.send(entry)?;
-        Ok(())
+    pub fn with_formatter(mut self, formatter: Arc<dyn Formatter>) -> Self {
+        self.formatter = Some(formatter);
+        self
     }
 
-    pub fn debug(&self, message: String, metadata: Option<serde_json::Value>) -> Result<()> {
-        self.log(Level::Debug, message, metadata)
+    pub fn with_writer(mut self, writer: Arc<dyn Writer>) -> Self {
+        self.writer = Some(writer);
+        self
     }
 
-    pub fn info(&self, message: String, metadata: Option<serde_json::Value>) -> Result<()> {
-        self.log(Level::Info, message, metadata)
+    pub fn with_plugin(mut self, plugin: Box<dyn Plugin>) -> Self {
+        self.plugins.push(plugin);
+        self
     }
 
-    pub fn warn(&self, message: String, metadata: Option<serde_json::Value>) -> Result<()> {
-        self.log(Level::Warn, message, metadata)
-    }
+    pub fn build(self) -> Result<Logger> {
+        let config = self.config.unwrap_or_else(|| Arc::new(RwLock::new(TomlConfig::default())));
+        let formatter = self.formatter.unwrap_or_else(|| Arc::new(SimpleFormatter));
+        let writer = self.writer.unwrap_or_else(|| Arc::new(ConsoleWriter));
 
-    pub fn error(&self, message: String, metadata: Option<serde_json::Value>) -> Result<()> {
-        self.log(Level::Error, message, metadata)
+        Ok(Logger::new(config, formatter, writer))
     }
+}
 
-    pub fn set_min_level(&self, level: Level) {
-        self.config.write().min_level = level;
-    }
+#[macro_export]
+macro_rules! log {
+    ($logger:expr, $level:expr, $($arg:tt)+) => {
+        $logger.log($level, format!($($arg)+), None, file!().to_string(), line!())
+    };
+}
 
-    pub fn get_config(&self) -> Config {
-        self.config.read().clone()
-    }
+#[macro_export]
+macro_rules! debug {
+    ($logger:expr, $($arg:tt)+) => {
+        log!($logger, $crate::Level::Debug, $($arg)+)
+    };
+}
+
+#[macro_export]
+macro_rules! info {
+    ($logger:expr, $($arg:tt)+) => {
+        log!($logger, $crate::Level::Info, $($arg)+)
+    };
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($logger:expr, $($arg:tt)+) => {
+        log!($logger, $crate::Level::Warn, $($arg)+)
+    };
+}
+
+#[macro_export]
+macro_rules! error {
+    ($logger:expr, $($arg:tt)+) => {
+        log!($logger, $crate::Level::Error, $($arg)+)
+    };
 }
